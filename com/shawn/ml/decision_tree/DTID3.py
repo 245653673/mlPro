@@ -11,10 +11,14 @@ def createDataSet():
     dataSet=[]
     file = open(u'data\data_train.txt', 'r')
     done = 0
+    distribution = ['c', 'd', 'c', 'd', 'c', 'd', 'd', 'd', 'd', 'd', 'c', 'c', 'c', 'd']
     while not  done:
         aLine = file.readline()
         if(aLine != ''):
             attItem = aLine.split(",")[:-1]
+            for i in range(len(distribution)):
+                if(distribution[i] == 'c'):
+                    attItem[i] = float(attItem[i])
             attItem.append("0" if aLine.split(",")[-1].strip()=='<=50K' else "1")
             dataSet.append(attItem)
         else:
@@ -22,8 +26,7 @@ def createDataSet():
     file.close()   #关闭文件
     label=['age', 'workclass', 'fnlwgt', 'education', 'education-num', 'marital-status', 'occupation', 'relationship', 'race',
            'sex', 'capital-gain', 'capital-loss', 'hours-per-week', 'native-country']
-    distribution = ['c', 'd', 'c', 'd', 'c', 'd', 'd', 'd', 'd',
-           'd', 'c', 'c', 'c', 'd']
+
     return dataSet, label, distribution
 
 dataSet, labels, distribution = createDataSet()
@@ -59,6 +62,20 @@ def splitLabels(dataSet, axis, value):
             retDataSet.append(reducedItem)
     return retDataSet
 
+def splitContiousLabels(dataSet, axis, value, lte):
+    '''
+    计算连续值得labels,属性可以重用
+    '''
+    retDataSet = []
+    for item in dataSet:
+        if lte=='y':
+            if item[axis] <= value:
+                retDataSet.append(item)
+        if lte=='n':
+            if item[axis] > value:
+                retDataSet.append(item)
+    return retDataSet
+
 def chooseBestFeatureToSplit(dataSet):
     '''
     选择最好的feature进行分裂
@@ -67,9 +84,10 @@ def chooseBestFeatureToSplit(dataSet):
     baseEntropy = calcShannonEnt(dataSet)
     bestInfoGain = 0.0
     bestFeature = -1
+    bestFeatureValue = ''
     for i in range(numFeature):
         # 处理离散值
-        if distribution[i] == 'c':
+        if distribution[i] == 'd':
             featList = [example[i] for example in dataSet]
             uniqueVals = set(featList)
             newEntropy = 0.0
@@ -81,9 +99,29 @@ def chooseBestFeatureToSplit(dataSet):
             if(infoGain > bestInfoGain):
                 bestInfoGain = infoGain
                 bestFeature = i
+                bestFeatureValue = value
         #处理连续值
-
-    return bestFeature
+        if distribution[i] == 'c':
+            featList = [example[i] for example in dataSet]
+            uniqueVals = set(featList)
+            sortedUniqueVals = sorted(uniqueVals)
+            midVals = []
+            for j in range(0, len(sortedUniqueVals)-1, 2):
+                midVals.append(float(sortedUniqueVals[j]+sortedUniqueVals[j+1])/2)
+            for value in midVals:
+                newEntropy = 0.0
+                subDataSet = splitContiousLabels(dataSet, i, value, 'y')
+                prob=len(subDataSet)/float(len(dataSet))
+                newEntropy += prob*calcShannonEnt(subDataSet)
+                subDataSet = splitContiousLabels(dataSet, i, value, 'n')
+                prob=len(subDataSet)/float(len(dataSet))
+                newEntropy += prob*calcShannonEnt(subDataSet)
+                infoGain = baseEntropy - newEntropy
+                if(infoGain > bestInfoGain):
+                    bestInfoGain = infoGain
+                    bestFeature = i
+                    bestFeatureValue = value
+    return bestFeature, bestFeatureValue
 
 print "bestFeature is "+str(chooseBestFeatureToSplit(dataSet))
 
@@ -105,15 +143,21 @@ def createTree(dataSet, labels):
         return classList[0]
     if len(dataSet[0]) == 1:
         return majorityCnt(labels)
-    bestFeat = chooseBestFeatureToSplit(dataSet)
+    bestFeat, bestFeatValue = chooseBestFeatureToSplit(dataSet)
     bestFeatLabel = labels[bestFeat]
     myTree = {bestFeatLabel:{}}
-    del labels[bestFeat]
-    featVals = [example[bestFeat] for example in dataSet]
-    uniqueVals = set(featVals)
-    for value in uniqueVals:
+    if(distribution[bestFeat]=='d'):
+        del labels[bestFeat]
+        del distribution[bestFeat]
+        featVals = [example[bestFeat] for example in dataSet]
+        uniqueVals = set(featVals)
+        for value in uniqueVals:
+            subLabels = labels[:]
+            myTree[bestFeatLabel][value] = createTree(splitLabels(dataSet, bestFeat, value), subLabels)
+    if(distribution[bestFeat]=='c'):
         subLabels = labels[:]
-        myTree[bestFeatLabel][value] = createTree(splitLabels(dataSet, bestFeat, value), subLabels)
+        myTree[bestFeatLabel]['<='+str(bestFeatValue)] = createTree(splitContiousLabels(dataSet, bestFeat, bestFeatValue, 'y'), subLabels)
+        myTree[bestFeatLabel]['>'+str(bestFeatValue)] = createTree(splitContiousLabels(dataSet, bestFeat, bestFeatValue, 'n'), subLabels)
     return myTree
 
 print createTree(dataSet, labels)
