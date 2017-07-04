@@ -61,15 +61,11 @@ class ID3(object):
 
     # print calcShannonEnt(self.dataSet)
 
-    def splitLabels(self,dataSet, axis, value=None):
+    def splitLabels(self,dataSet, axis, value):
         '''
         计算某个特定值得labels
         '''
         retDataSet = []
-        if value == None:
-            for item in dataSet:
-                item = item[:axis].extend(item[axis+1:])
-            return dataSet
         for item in dataSet:
             if item[axis] == value:
                 reducedItem = item[:axis]
@@ -102,8 +98,6 @@ class ID3(object):
         bestFeatureValue = ''
         for i in range(numFeature):
             # 处理离散值
-            print i
-            print 'len item %f, len d %f' %(len(dataSet[0]), len(distribution))
             if distribution[i] == 'd':
                 featList = [example[i] for example in dataSet]
                 uniqueVals = set(featList)
@@ -145,15 +139,15 @@ class ID3(object):
 
     # print "bestFeature is "+str(chooseBestFeatureToSplit())
 
-    def majorityCnt(self):
+    def majorityCnt(self, labels):
         '''
         节点不可再分时，按照投票原则来选择多的类别
         '''
         classCount = {}
-        for vote in self.labels:
+        for vote in labels:
             if vote in classCount.keys():
                 classCount[vote] = 0
-            classCount[vote] +=1
+            classCount[vote] += 1
         sortedClassCount = sorted(classCount.iteritems(), key=operator.itemgetter(1), reverse=True)
         return sortedClassCount[0][0]
 
